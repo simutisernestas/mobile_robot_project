@@ -10,4 +10,4 @@
 # if the files to be tracked are in subdirectories
 !/launch/launch_project.launch
 !/scripts/state_machines/sm_students.py
-!/scripts/behavior_trees/bt_students.py
+!/scripts/behaviour_trees/bt_students.py
