@@ -36,7 +36,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
 		# become the tree
 		tree = RSequence(name="Main sequence", children=[b0, b1, b2, b3, b4])
-		super(BehaviourTree, self).__init__(tree)
+		super(BehaviourTree,available as a BT) self).__init__(tree)
 
 		# execute the behaviour tree
 		rospy.sleep(5)
