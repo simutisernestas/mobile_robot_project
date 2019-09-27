@@ -1,0 +1,12 @@
+/play_motion/list_motions [service gripping motions list]
+
+/plan_kinematic_path [service joint planner]
+
+/get_planner_params [planner config? group?]
+
+/set_planner_params [params from /get_planner_params]
+
+/play_motion/goal [pregrasp action here]
+
+/play_motion/list_motions [motions list, nothing useful instead of pregrasp]
+
