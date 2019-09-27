@@ -8,6 +8,6 @@
 !*/
 
 # if the files to be tracked are in subdirectories
-!*/launch/gazebo_project.launch
-!*/scripts/sm_students.py
-!*/scripts/bt_students.py
+!/launch/launch_project.launch
+!/scripts/state_machines/sm_students.py
+!/scripts/behavior_trees/bt_students.py
