@@ -21,7 +21,7 @@ for name in MoveItErrorCodes.__dict__.keys():
     if not name[:1] == '_':
         code = MoveItErrorCodes.__dict__[name]
         moveit_error_dict[code] = name
-
+#hallo
 class StateMachine(object):
     def __init__(self):
         
@@ -51,7 +51,7 @@ class StateMachine(object):
         self.state = 0
         rospy.sleep(3)
         self.check_states()
-
+State 0: Move the robot "manually" to door
 
     def check_states(self):
 
