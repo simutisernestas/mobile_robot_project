@@ -10,7 +10,7 @@ from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from robotics_project.srv import MoveHead, MoveHeadRequest, MoveHeadResponse
 from play_motion_msgs.msg import PlayMotionAction, PlayMotionGoal
 from sensor_msgs.msg import JointState
-from gazebo_msgs.srv import GetModelState
+
 from actionlib import SimpleActionClient
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from nav_msgs.msg import Odometry
@@ -22,6 +22,9 @@ for name in MoveItErrorCodes.__dict__.keys():
         code = MoveItErrorCodes.__dict__[name]
         moveit_error_dict[code] = name
 
+# new includes
+from gazebo_msgs.srv import GetModelState
+
 
 class StateMachine(object):
     def __init__(self):
@@ -32,10 +35,18 @@ class StateMachine(object):
         self.cmd_vel_top = rospy.get_param(rospy.get_name() + '/cmd_vel_topic')
         self.mv_head_srv_nm = rospy.get_param(rospy.get_name() + '/move_head_srv')
 
-        # Subscribe to topics
+        # Joint states
+        self.joint_names = []
+        self.joint_positions = []
+        # Joint states subscriber
+        rospy.Subscriber("/joint_states", JointState, self.store_joint_states)
 
         # Wait for service providers
         rospy.wait_for_service(self.mv_head_srv_nm, timeout=30)
+        rospy.wait_for_service('/gazebo/get_model_state')
+
+        # Service definitions
+        self.cube_state_service = rospy.ServiceProxy('/gazebo/get_model_state', GetModelState)
 
         # Instantiate publishers
         self.cmd_vel_pub = rospy.Publisher(self.cmd_vel_top, Twist, queue_size=10)
@@ -52,34 +63,31 @@ class StateMachine(object):
         self.state = 0
         rospy.sleep(3)
         self.check_states()
-    #State 0: Move the robot "manually" to door
 
     def check_states(self):
 
-        while not rospy.is_shutdown() and self.state != 4:
-            """
-            # State 0: Move the robot "manually" to door
+        while not rospy.is_shutdown():
+            
             if self.state == 0:
-                move_msg = Twist()
-                move_msg.linear.x = 1
+                ''' 
+                pose: 
+                    position: 
+                        x: -1.13052999157
+                        y: -6.65364997757
+                        z: 0.862499888987
+                    orientation: 
+                        x: -2.33275997942e-07
+                        y: 7.05838404591e-08
+                        z: 3.72236587881e-09
+                        w: 1.0
+                ''' 
+                cube_model = self.cube_state_service('aruco_cube', '')
+                x = cube_model.pose.position.x
 
-                rate = rospy.Rate(10)
-                converged = False
-                cnt = 0
-                rospy.loginfo("%s: Moving towards door", self.node_name)
-                while not rospy.is_shutdown() and cnt < 25:
-                    self.cmd_vel_pub.publish(move_msg)
-                    rate.sleep()
-                    cnt = cnt + 1
-
-                self.state = 1
-                rospy.sleep(1)
-
-            # State 1:  Tuck arm 
             if self.state == 1:
                 rospy.loginfo("%s: Tucking the arm...", self.node_name)
                 goal = PlayMotionGoal()
-                goal.motion_name = 'home'
+                goal.motion_name = 'pregrasp'
                 goal.skip_planning = True
                 self.play_motion_ac.send_goal(goal)
                 success_tucking = self.play_motion_ac.wait_for_result(rospy.Duration(100.0))
@@ -89,77 +97,10 @@ class StateMachine(object):
                     self.state = 2
                 else:
                     self.play_motion_ac.cancel_goal()
-                    rospy.logerr("%s: play_motion failed to tuck arm, reset simulation", self.node_name)
+                    rospy.logerr("%s: play_motion failed, reset simulation", self.node_name)
                     self.state = 5
 
                 rospy.sleep(1)
-
-            # State 2:  Move the robot "manually" to chair
-            if self.state == 2:
-                move_msg = Twist()
-                move_msg.angular.z = -1
-
-                rate = rospy.Rate(10)
-                converged = False
-                cnt = 0
-                rospy.loginfo("%s: Moving towards table", self.node_name)
-                while not rospy.is_shutdown() and cnt < 5:
-                    self.cmd_vel_pub.publish(move_msg)
-                    rate.sleep()
-                    cnt = cnt + 1
-
-                move_msg.linear.x = 1
-                move_msg.angular.z = 0
-                cnt = 0
-                while not rospy.is_shutdown() and cnt < 15:
-                    self.cmd_vel            if self.state == 0:
-                move_msg = Twist()
-                move_msg.linear.x = 1
-
-                rate = rospy.Rate(10)
-                converged = False
-                cnt = 0
-                rospy.loginfo("%s: Moving towards door", self.node_name)
-                while not rospy.is_shutdown() and cnt < 25:
-                    self.cmd_vel_pub.publish(move_msg)
-                    rate.sleep()
-                    cnt = cnt + 1
-
-                self.state = 1
-                rospy.sleep(1)_pub.publish(move_msg)
-                    rate.sleep()
-                    cnt = cnt + 1
-
-                self.state = 3
-                rospy.sleep(1)
-
-            # State 3:  Lower robot head service
-            if self.state == 3:
-            	try:
-                    rospy.loginfo("%s: Lowering robot head", self.node_name)
-                    move_head_srv = rospy.ServiceProxy(self.mv_head_srv_nm, MoveHead)
-                    move_head_req = move_head_srv("down")
-                    
-                    if move_head_req.success == True:
-                        self.state = 4
-                        rospy.loginfo("%s: Move head down succeded!", self.node_name)
-                    else:
-                        rospy.loginfo("%s: Move head down failed!", self.node_name)
-                        self.state = 5
-gazebo_msgs
-                    rospy.sleep(3)gazebo_msgs
-                gazebo_msgs
-                except rospy.ServiceException, e:gazebo_msgs
-                    print "Service call to move_head server failed: %s"%e
-            """
-            #State pickup 
-            if self.state == 0:
-                rospy.wait_for_service('/gazebo/get_model_state')
-                service = rospy.ServiceProxy('/gazebo/get_model_state', GetModelState)
-                getmodelstate = GetModelState()
-                result = service('aruco_cube','')
-                #print(result)
-
 
             # Error handling
             if self.state == 5:
@@ -168,6 +109,18 @@ gazebo_msgs
 
         rospy.loginfo("%s: State machine finished!", self.node_name)
         return
+
+    def store_joint_states(self, data):
+        '''
+        arm_1_joint, arm_2_joint, arm_3_joint, arm_4_joint, arm_5_joint, arm_6_joint, arm_7_joint,
+        gripper_left_finger_joint, gripper_right_finger_joint, head_1_joint, head_2_joint,
+        torso_lift_joint, wheel_left_joint, wheel_right_joint, caster_back_left_1_joint,
+        caster_back_left_2_joint, caster_front_left_1_joint, caster_front_left_2_joint,
+        caster_back_right_1_joint, caster_back_right_2_joint, caster_front_right_1_joint,
+        caster_front_right_2_joint, suspension_left_joint, suspension_right_joint
+        '''
+        self.joint_names = data.name
+        self.joint_positions = data.position
 
 
 # import py_trees as pt, py_trees_ros as ptr
@@ -344,6 +297,101 @@ gazebo_msgs
 # 		else: return pt.common.Status.SUCCESS if self.move_head_req.success else pt.common.Status.FAILURE
 
 
+"""
+            # State 0: Move the robot "manually" to door
+            if self.state == 0:
+                move_msg = Twist()
+                move_msg.linear.x = 1
+
+                rate = rospy.Rate(10)
+                converged = False
+                cnt = 0
+                rospy.loginfo("%s: Moving towards door", self.node_name)
+                while not rospy.is_shutdown() and cnt < 25:
+                    self.cmd_vel_pub.publish(move_msg)
+                    rate.sleep()
+                    cnt = cnt + 1
+
+                self.state = 1
+                rospy.sleep(1)
+
+            # State 1:  Tuck arm 
+            if self.state == 1:
+                rospy.loginfo("%s: Tucking the arm...", self.node_name)
+                goal = PlayMotionGoal()
+                goal.motion_name = 'home'
+                goal.skip_planning = True
+                self.play_motion_ac.send_goal(goal)
+                success_tucking = self.play_motion_ac.wait_for_result(rospy.Duration(100.0))
+
+                if success_tucking:
+                    rospy.loginfo("%s: Arm tucked.", self.node_name)
+                    self.state = 2
+                else:
+                    self.play_motion_ac.cancel_goal()
+                    rospy.logerr("%s: play_motion failed to tuck arm, reset simulation", self.node_name)
+                    self.state = 5
+
+                rospy.sleep(1)
+
+            # State 2:  Move the robot "manually" to chair
+            if self.state == 2:
+                move_msg = Twist()
+                move_msg.angular.z = -1
+
+                rate = rospy.Rate(10)
+                converged = False
+                cnt = 0
+                rospy.loginfo("%s: Moving towards table", self.node_name)
+                while not rospy.is_shutdown() and cnt < 5:
+                    self.cmd_vel_pub.publish(move_msg)
+                    rate.sleep()
+                    cnt = cnt + 1
+
+                move_msg.linear.x = 1
+                move_msg.angular.z = 0
+                cnt = 0
+                while not rospy.is_shutdown() and cnt < 15:
+                    self.cmd_vel            if self.state == 0:
+                move_msg = Twist()
+                move_msg.linear.x = 1
+
+                rate = rospy.Rate(10)
+                converged = False
+                cnt = 0
+                rospy.loginfo("%s: Moving towards door", self.node_name)
+                while not rospy.is_shutdown() and cnt < 25:
+                    self.cmd_vel_pub.publish(move_msg)
+                    rate.sleep()
+                    cnt = cnt + 1
+
+                self.state = 1
+                rospy.sleep(1)_pub.publish(move_msg)
+                    rate.sleep()
+                    cnt = cnt + 1
+
+                self.state = 3
+                rospy.sleep(1)
+
+            # State 3:  Lower robot head service
+            if self.state == 3:
+            	try:
+                    rospy.loginfo("%s: Lowering robot head", self.node_name)
+                    move_head_srv = rospy.ServiceProxy(self.mv_head_srv_nm, MoveHead)
+                    move_head_req = move_head_srv("down")
+                    
+                    if move_head_req.success == True:
+                        self.state = 4
+                        rospy.loginfo("%s: Move head down succeded!", self.node_name)
+                    else:
+                        rospy.loginfo("%s: Move head down failed!", self.node_name)
+                        self.state = 5
+gazebo_msgs
+                    rospy.sleep(3)gazebo_msgs
+                gazebo_msgs
+                except rospy.ServiceException, e:gazebo_msgs
+                    print "Service call to move_head server failed: %s"%e
+            """
 	
 
 if __name__ == "__main__":
