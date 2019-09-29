@@ -15,7 +15,6 @@
   <env name="PAL_HOST"            value="tiago" />
   <env name="LC_NUMERIC"          value="C" />
 
-
   <!-- Navigation -->
   <arg name="provide_map"     default="false"/>
   <arg name="localization"    default="amcl"/>
@@ -83,23 +82,23 @@
       <param name="nav_goal_topic"      value=""/>
       <param name="cmd_vel_topic"       value="/key_vel"/>
       <param name="move_base_frame"     value=""/>
-      <param name="pick_pose_topic"     value=""/>
+      <param name="pick_pose_topic"     value="/$(arg namespace_project)/pick_pose_topic"/>
       <param name="place_pose_topic"    value="/$(arg namespace_project)/place_pose_topic"/>
       <param name="aruco_pose_topic"    value=""/> 
       <param name="cube_pose"           value="0.50306828716, 10, 0.915538062216, 0.0144467629456, 0.706141958739, 0.707257659069, -0.0306827123383"/>
       <param name="robot_base_frame"    value="" />
       <param name="move_head_srv"       value="/$(arg namespace_project)/move_head_gui"/>
       <param name="amcl_estimate"       value="" />
-      <param name="move_base_feedback"  value="" />
+      <param name="move_base_feedback"  value="/ground_truth_odom" />
     </node>
 
     <!-- Goal poses for navigation -->
     <node pkg="robotics_project" type="poses_pub.py" name="poses_publisher" output="screen">
       <param name="pick_pose"         value="-1.1480, -6.1, -0.001, 0.0, 0.0, -0.709307863674, 0.70489882574"/>
       <param name="place_pose"        value="2.6009, -1.7615, 0.0, 0.0, 0.0, 0.0, 1"/>
-      <param name="pick_pose_topic"   value="/place_holder1"/>
+      <param name="pick_pose_topic"   value="/$(arg namespace_project)/pick_pose_topic"/>
       <param name="place_pose_topic"  value="/$(arg namespace_project)/place_pose_topic"/>
-      <param name="map_frame"         value="map"/>
+      <param name="map_frame"         value="odom"/>
     </node>
 
     <!-- Node exposing service to trigger the pick and place -->
@@ -122,7 +121,8 @@
     <!-- Aruco marker detector -->
     <node pkg="aruco_ros" type="single"  name="aruco_single" output="screen">
         <param name="camera_frame"       value="xtion_rgb_optical_frame"/>
-        <param name="aruco_frame"        value="map" />
+        <!-- TODO CONFIRM THAT MAP CORRECT ? -->
+        <param name="aruco_frame"        value="map" /> 
         <remap from="/camera_info"       to="/xtion/rgb/camera_info" />
         <remap from="/image"             to="/xtion/rgb/image_rect_color" />
         <param name="marker_pose_topic"  value="/$(arg namespace_project)/marker_pose_topic"/>
@@ -131,7 +131,7 @@
   </group>
 
   <!-- Map providers -->
-<!--   <group if="$(arg provide_map)">
+  <!-- <group if="$(arg provide_map)">
     <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_path)/map.yaml"/>
     <node name="relay_map" pkg="topic_tools" type="relay" args="/map /vo_map"/>
   </group> -->
