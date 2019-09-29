@@ -104,7 +104,7 @@ class StateMachine(object):
     def check_states(self):
 
         while not rospy.is_shutdown():
-
+            
             # Lower robot head
             if self.state == 0:
                 try:
@@ -133,7 +133,7 @@ class StateMachine(object):
                     self.play_motion_ac.cancel_goal()
                     rospy.logerr(
                         "%s: play_motion failed, reset simulation", self.node_name)
-                    self.state = 6
+                    self.state = 7
 
                 rospy.sleep(1)
 
@@ -149,41 +149,87 @@ class StateMachine(object):
                 except rospy.ServiceException, e:
                     rospy.logerr(
                         "%s: service failed to pick cube", self.node_name)
-
+                
             if self.state == 3:
                 move_msg = Twist()
-                move_msg.angular.z = 1
+                move_msg.angular.z = -1
 
                 rate = rospy.Rate(10)
                 cnt = 0
-                while not rospy.is_shutdown() and cnt < 29:
+                while not rospy.is_shutdown() and cnt < 30:
                     self.cmd_vel_pub.publish(move_msg)
                     rate.sleep()
                     cnt = cnt + 1
 
                 self.state += 1
                 rospy.sleep(1)
-
+                
             if self.state == 4:
+                move_msg = Twist()
+                move_msg.linear.x = 0.47 
+
+                rate = rospy.Rate(10)
+                cnt = 0
+                while not rospy.is_shutdown() and cnt < 18:
+                    self.cmd_vel_pub.publish(move_msg)
+                    rate.sleep()
+                    cnt = cnt + 1
+
+                self.state += 1
+                rospy.sleep(1)
+                
+
+            
+            if self.state == 5:
                 try:
                     place_cube_srv = self.place_cube_srv(False)
 
                     if place_cube_srv.success == True:
-                        self.state += 1
+                        self.state = 6 
+                    else:
+                        self.state = 8
 
                     rospy.sleep(1)
                 except rospy.ServiceException, e:
                     rospy.logerr(
                         "%s: service failed to place cube", self.node_name)
-
-            if self.state == 5:
+        
+            if self.state == 6:
                 rospy.loginfo("%s: SUCCESSSSSS", self.node_name)
                 exit()
 
             # Error handling
-            if self.state == 6:
+            if self.state == 7:
                 rospy.logerr("%s: State machine failed. Check your code and try again!", self.node_name)
                 return
+            #If placing failed move back to other table
+            if self.state == 8:
+                move_msg = Twist()
+                move_msg.angular.z = 1
+
+                rate = rospy.Rate(10)
+                cnt = 0
+                while not rospy.is_shutdown() and cnt < 30:
+                    self.cmd_vel_pub.publish(move_msg)
+                    rate.sleep()
+                    cnt = cnt + 1
+
+                self.state += 1
+                rospy.sleep(1)
+                
+            if self.state == 9:
+                move_msg = Twist()
+                move_msg.linear.x = 0.47 
+
+                rate = rospy.Rate(10)
+                cnt = 0
+                while not rospy.is_shutdown() and cnt < 18:
+                    self.cmd_vel_pub.publish(move_msg)
+                    rate.sleep()
+                    cnt = cnt + 1
+
+                self.state = 1
+                rospy.sleep(1)
 
         rospy.loginfo("%s: State machine finished!", self.node_name)
         return
