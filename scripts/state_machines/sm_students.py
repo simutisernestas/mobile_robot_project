@@ -46,8 +46,8 @@ class StateMachine(object):
             rospy.get_name() + '/place_pose_topic')
         self.pick_pose_top_name = rospy.get_param(
             rospy.get_name() + '/pick_pose_topic')
-        self.move_base_top_name = rospy.get_param(
-            rospy.get_name() + '/move_base_feedback')
+        # self.move_base_top_name = rospy.get_param(
+        #     rospy.get_name() + '/move_base_feedback')
 
         # Subscribers
         # rospy.Subscriber("/joint_states", JointState, self.store_joint_states)
@@ -55,13 +55,19 @@ class StateMachine(object):
                          PoseStamped, self.store_place_pose)
         rospy.Subscriber(self.pick_pose_top_name,
                          PoseStamped, self.store_pick_pose)
-        rospy.Subscriber(self.move_base_top_name,
-                         Odometry, self.store_robot_position)
+        # rospy.Subscriber(self.move_base_top_name,
+        #                  Odometry, self.store_robot_position)
 
         # Wait for service providers
         rospy.wait_for_service(self.move_head_srv_name, timeout=30)
         rospy.wait_for_service(self.pick_cube_srv_name, timeout=30)
         rospy.wait_for_service(self.place_cube_srv_name, timeout=30)
+        rospy.wait_for_service('/global_localization', timeout=30)
+
+        loc = rospy.ServiceProxy('/global_localization', Empty)
+        loc()
+        loc()
+        loc()
 
         # Service definitions
         self.move_head_srv = rospy.ServiceProxy(
@@ -87,10 +93,11 @@ class StateMachine(object):
         rospy.loginfo(
             "%s: Connected to play_motion action server", self.node_name)
 
-        self.tf_buffer = tf2_ros.Buffer(rospy.Duration(1200.0))
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
+        self.move_to_goal_ac = rospy.Publisher("/move_base_simple/goal", PoseStamped)
 
         # Dump
+        # self.tf_buffer = tf2_ros.Buffer(rospy.Duration(1200.0))
+        # self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
         # cp = rospy.get_param(rospy.get_name() + "/cube_pose")
         # pp = rospy.get_param(rospy.get_name() + "/pick_pose_topic")
         # rospy.wait_for_service('/gazebo/get_model_state')
@@ -102,9 +109,8 @@ class StateMachine(object):
         self.check_states()
 
     def check_states(self):
-
         while not rospy.is_shutdown():
-            
+
             # Lower robot head
             if self.state == 0:
                 try:
@@ -117,7 +123,6 @@ class StateMachine(object):
                 except rospy.ServiceException, e:
                     print "Service call to move_head failed: %s" % e
 
-            # Tucking the arm
             if self.state == 1:
                 goal = PlayMotionGoal()
                 goal.motion_name = 'home'
@@ -125,20 +130,37 @@ class StateMachine(object):
                 self.play_motion_ac.send_goal(goal)
                 success_tucking = self.play_motion_ac.wait_for_result(
                     rospy.Duration(100.0))
-
                 if success_tucking:
                     rospy.loginfo("%s: Arm tucked.", self.node_name)
-                    self.state += 1
                 else:
                     self.play_motion_ac.cancel_goal()
-                    rospy.logerr(
-                        "%s: play_motion failed, reset simulation", self.node_name)
-                    self.state = 7
+                rospy.sleep(1)
 
+                rospy.loginfo("%s: SPINNING", self.node_name)
+
+                move_msg = Twist()
+                move_msg.angular.z = -1
+
+                rate = rospy.Rate(10)
+                cnt = 0
+                while not rospy.is_shutdown() and cnt < 60:
+                    self.cmd_vel_pub.publish(move_msg)
+                    rate.sleep()
+                    cnt = cnt + 1
+
+                self.state += 1
+                rospy.sleep(1)
+
+                rospy.loginfo("%s: DONE SPINNING", self.node_name)
+
+                self.move_to_goal_ac.publish(self.pick_pose_msg)
+                self.state += 1
                 rospy.sleep(1)
 
             # Pick cube
             if self.state == 2:
+                # Check if in front of table
+                # Only then pick up
                 try:
                     pick_cube_req = self.pick_cube_srv(False)
 
@@ -149,87 +171,34 @@ class StateMachine(object):
                 except rospy.ServiceException, e:
                     rospy.logerr(
                         "%s: service failed to pick cube", self.node_name)
-                
+
             if self.state == 3:
-                move_msg = Twist()
-                move_msg.angular.z = -1
-
-                rate = rospy.Rate(10)
-                cnt = 0
-                while not rospy.is_shutdown() and cnt < 30:
-                    self.cmd_vel_pub.publish(move_msg)
-                    rate.sleep()
-                    cnt = cnt + 1
-
+                self.move_to_goal_ac.publish(self.place_pose_msg)
                 self.state += 1
-                rospy.sleep(1)
-                
+
             if self.state == 4:
-                move_msg = Twist()
-                move_msg.linear.x = 0.47 
-
-                rate = rospy.Rate(10)
-                cnt = 0
-                while not rospy.is_shutdown() and cnt < 18:
-                    self.cmd_vel_pub.publish(move_msg)
-                    rate.sleep()
-                    cnt = cnt + 1
-
-                self.state += 1
-                rospy.sleep(1)
-                
-
-            
-            if self.state == 5:
+                # Check if in front of table
+                # Only then put it down
                 try:
                     place_cube_srv = self.place_cube_srv(False)
 
                     if place_cube_srv.success == True:
-                        self.state = 6 
-                    else:
-                        self.state = 8
+                        self.state += 1
 
                     rospy.sleep(1)
                 except rospy.ServiceException, e:
                     rospy.logerr(
                         "%s: service failed to place cube", self.node_name)
-        
-            if self.state == 6:
+
+            if self.state == 5:
                 rospy.loginfo("%s: SUCCESSSSSS", self.node_name)
                 exit()
 
             # Error handling
-            if self.state == 7:
-                rospy.logerr("%s: State machine failed. Check your code and try again!", self.node_name)
-                return
-            #If placing failed move back to other table
-            if self.state == 8:
-                move_msg = Twist()
-                move_msg.angular.z = 1
-
-                rate = rospy.Rate(10)
-                cnt = 0
-                while not rospy.is_shutdown() and cnt < 30:
-                    self.cmd_vel_pub.publish(move_msg)
-                    rate.sleep()
-                    cnt = cnt + 1
-
-                self.state += 1
-                rospy.sleep(1)
-                
-            if self.state == 9:
-                move_msg = Twist()
-                move_msg.linear.x = 0.47 
-
-                rate = rospy.Rate(10)
-                cnt = 0
-                while not rospy.is_shutdown() and cnt < 18:
-                    self.cmd_vel_pub.publish(move_msg)
-                    rate.sleep()
-                    cnt = cnt + 1
-
-                self.state = 1
-                rospy.sleep(1)
+            # if self.state == 7:
+            #     rospy.logerr(
+            #         "%s: State machine failed. Check your code and try again!", self.node_name)
+            #     return
 
         rospy.loginfo("%s: State machine finished!", self.node_name)
         return
@@ -253,20 +222,12 @@ class StateMachine(object):
         self.pick_pose_msg = data
 
     def store_robot_position(self, msg):
-        # br = tf.TransformBroadcaster()
-        # br.sendTransform((msg.pose.x, msg.pose.y, 0),
-        #              tf.transformations.quaternion_from_euler(0, 0, msg.theta),
-        #              rospy.Time.now(),
-        #              'from',
-        #              'to')
         self.robot_position = msg
 
 
 if __name__ == "__main__":
-
     rospy.init_node('main_state_machine')
     try:
-                # StateMachine()
         StateMachine()
     except rospy.ROSInterruptException:
         pass
