@@ -44,8 +44,6 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 		while not rospy.is_shutdown(): self.tick_tock(1)	
 
 if __name__ == "__main__":
-
-
 	rospy.init_node('main_state_machine')
 	try:
 		BehaviourTree()
