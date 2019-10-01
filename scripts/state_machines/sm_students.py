@@ -160,7 +160,7 @@ class StateMachine(object):
                 rospy.sleep(1)
 
                 rospy.loginfo("%s: DONE SPINNING", self.node_name)
-
+                """
                 # Move to pick pose callback (action client)
                 def callback(data):
                     pick_x = self.pick_pose_msg.pose.position.x
@@ -172,46 +172,71 @@ class StateMachine(object):
 
                     if pos_err > 0.05:
                         return
+                """ 
+                def callback(data):
+                    pick_x = self.pick_pose_msg.pose.position.x
+                    pick_y = self.pick_pose_msg.pose.position.y
+                    curr_x = data.base_position.pose.position.x
+                    curr_y = data.base_position.pose.position.y
 
-                    # Position reached
+                    pos_err = np.sqrt((pick_x-curr_x)**2 + (pick_y-curr_y)**2)
+                    
+                    if pos_err > 0.05:
+                        return
+                    
                     self.move_to_goal_ac.cancel_goal()
-                    rospy.loginfo("%s: GOAL REACHED", self.node_name)
-
-                    try: # Head down
-                        move_head_req = self.move_head_srv("down")
-                        if move_head_req.success == True:
-                            self.state += 1
-                        rospy.sleep(1)
-                    except rospy.ServiceException, e:
-                        print "Service call to move_head failed: %s" % e
-
-                    move_msg = Twist()
-                    move_msg.angular.z = -1
-                    rate = rospy.Rate(10)
-                    cnt = 0
-                    # Spin until robot sees see the cube 
-                    while not self.aruco_pose_rcv:
-                        self.cmd_vel_pub.publish(move_msg)
-                        rate.sleep()
-                        cnt = cnt + 1
-
-                    # Stop spin
-                    move_msg.angular.z = 0
-                    for _ in range(5):
-                        self.cmd_vel_pub.publish(move_msg)
+                    return
 
                 # Send goal to move
                 move_goal = MoveBaseGoal()
                 move_goal.target_pose.pose = self.pick_pose_msg.pose
                 move_goal.target_pose.header.frame_id = 'map'
                 self.move_to_goal_ac.send_goal(move_goal, feedback_cb=callback)
-                self.move_to_goal_ac.wait_for_result(rospy.Duration(1000))
+                success = self.move_to_goal_ac.wait_for_result(rospy.Duration(1000))
+                if success:
+                    rospy.loginfo("%s: Moved to Table1.", self.node_name)
+                else:
+                    rospy.loginfo("%s: ancel ,moving to table1", self.node_name)
+                    self.move_to_goal_ac.cancel_goal()
+                
                 self.state += 1
                 rospy.sleep(1)
 
-            # Pick cube
             if self.state == 2:
+                # Position reached
+                rospy.loginfo("%s: GOAL REACHED", self.node_name)
+
+                try: # Head down
+                    move_head_req = self.move_head_srv("down")
+                    #if move_head_req.success == True:
+                    rospy.sleep(1)
+                except rospy.ServiceException, e:
+                    print "Service call to move_head failed: %s" % e
+                
+                move_msg = Twist()
+                move_msg.angular.z = -1
+                rate = rospy.Rate(10)
+                cnt = 0
+                # Spin until robot sees see the cube 
+                while not self.aruco_pose_rcv:
+                    self.cmd_vel_pub.publish(move_msg)
+                    rate.sleep()
+                    cnt = cnt + 1
+
+                # Stop spin
+                move_msg.angular.z = 0
+                for _ in range(5):
+                    self.cmd_vel_pub.publish(move_msg)
+
+                rospy.sleep(1)
+                self.state += 1
+
+            # Pick cube
+            if self.state == 3:
+                rospy.logerr("%s: STATE 3", self.node_name)
+
                 # Pregrasp position
+                """
                 goal = PlayMotionGoal()
                 goal.motion_name = 'pregrasp'
                 goal.skip_planning = True
@@ -222,10 +247,10 @@ class StateMachine(object):
                 else:
                     self.play_motion_ac.cancel_goal()
                 rospy.sleep(1)
-
+                """
                 # Pick
                 try:
-                    pick_cube_req = self.pick_cube_srv(True)
+                    pick_cube_req = self.pick_cube_srv(False)
 
                     if pick_cube_req.success == True:
                         self.state += 1
@@ -236,13 +261,51 @@ class StateMachine(object):
                         "%s: service failed to pick cube", self.node_name)
 
             # Go to other table
-            if self.state == 3:
-                # LOOKS LIKE HERE IT LOSSES POSITION OF ROBOT. WHY ??
-                self.move_to_goal_top.publish(self.place_pose_msg)
-                return
+            if self.state == 4:
+                rospy.logerr("%s: STATE 4", self.node_name)
+
+                self.localize_srv()
+
+                try: # Head down
+                    move_head_req = self.move_head_srv("up")
+                    rospy.sleep(5)
+                except rospy.ServiceException, e:
+                    print "Service call to move_head failed: %s" % e
+
+                move_msg = Twist()
+                move_msg.angular.z = -1
+                rate = rospy.Rate(10)
+                cnt = 0
+                while cnt < 60:
+                    self.cmd_vel_pub.publish(move_msg)
+                    rate.sleep()
+                    cnt = cnt + 1
+
+                # Stop spin
+                move_msg.angular.z = 0
+                for _ in range(5):
+                    self.cmd_vel_pub.publish(move_msg)
+
+                rospy.sleep(1)
+
+                move_goal = MoveBaseGoal()
+                move_goal.target_pose.pose = self.place_pose_msg.pose
+                move_goal.target_pose.header.frame_id = 'map'
+                self.move_to_goal_ac.send_goal(move_goal)
+                success = self.move_to_goal_ac.wait_for_result(rospy.Duration(1000))
+                if success:
+                    rospy.loginfo("%s: Moved to Table2.", self.node_name)
+                else:
+                    rospy.loginfo("%s: Cancel moving to table2", self.node_name)
+                    self.move_to_goal_ac.cancel_goal()
+
                 self.state += 1
 
-            if self.state == 4:
+            if self.state == 5:
+                rospy.logerr("%s: STATE 5", self.node_name)
+                rospy.logerr("%s: STATE 5", self.node_name)
+                rospy.logerr("%s: STATE 5", self.node_name)
+
                 # Check if in front of table, only then put it down
                 try:
                     place_cube_srv = self.place_cube_srv(False)
@@ -255,7 +318,7 @@ class StateMachine(object):
                     rospy.logerr(
                         "%s: service failed to place cube", self.node_name)
 
-            if self.state == 5:
+            if self.state == 6:
                 rospy.loginfo("%s: SUCCESSSSSS", self.node_name)
                 exit()
 
