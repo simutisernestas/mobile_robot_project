@@ -272,7 +272,7 @@ class StateMachine(object):
 
                 # Pick
                 try:
-                    pick_cube_req = self.pick_cube_srv(False)
+                    pick_cube_req = self.pick_cube_srv(True)
                     
                     rospy.loginfo(pick_cube_req)
 
