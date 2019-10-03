@@ -7,67 +7,7 @@ from std_srvs.srv import Empty, SetBool, SetBoolRequest
 from actionlib import SimpleActionClient
 from play_motion_msgs.msg import PlayMotionAction, PlayMotionGoal
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
-"""
-class home(pt.behaviour.Behaviour):
 
-    
-    Sends a goal to the home action server.
-    Returns running whilst awaiting the result,
-    success if the action was succesful, and v.v..
-
-
-    def __init__(self):
-		rospy.loginfo("Initialising home behaviour.")
-		rospy.logerr("home")
-        # Set up action client
-		
-		self.play_motion_ac = SimpleActionClient("/play_motion", PlayMotionAction)
-
-        # personal goal setting
-		self.goal = PlayMotionGoal()
-		self.goal.motion_name = 'home'
-		self.goal.skip_planning = True
-
-        # execution checker
-		self.sent_goal = False
-		self.finished = False
-
-        # become a behaviour
-		# super(home, self).__init__("Home")
-
-    def update(self):
-
-        # already tucked the arm
-        if self.finished: 
-            return pt.common.Status.SUCCESS
-        
-        # command to tuck arm if haven't already
-        elif not self.sent_goal:
-
-            # send the goal
-            self.play_motion_ac.send_goal(self.goal)
-            self.sent_goal = True
-
-            # tell the tree you're running
-            return pt.common.Status.RUNNING
-
-        # if I was succesful! :)))))))))
-        elif self.play_motion_ac.get_result():
-
-            # than I'm finished!
-            self.finished = True
-            return pt.common.Status.SUCCESS
-
-        # if failed
-        elif not self.play_motion_ac.get_result():
-            return pt.common.Status.FAILURE
-        # try if not triedmofrom actionlib import SimpleActionClient
-from play_motion_msgs.msg import PlayMotionAction, PlayMotionGoaln.Status.FAILURE
-
-        # if I'm still trying :|
-        else:
-            return pt.common.Status.RUNNING
-"""
 class pickcube(pt.behaviour.Behaviour):
 
     
@@ -175,9 +115,15 @@ class checker(pt.behaviour.Behaviour):
 		self.aruco_pose_subs = rospy.Subscriber(self.aruco_pose_top, PoseStamped, aruco_callback)
 		super(checker, self).__init__("Checker")
     def update(self):
+		self.aruco_pose_rcv = False
+		def aruco_callback(data):
+			self.aruco_pose_rcv = True
+		self.aruco_pose_subs = rospy.Subscriber(self.aruco_pose_top, PoseStamped, aruco_callback)
 		if self.aruco_pose_rcv == True:
+			rospy.logerr("checker success")
 			return pt.common.Status.SUCCESS
 		else:
+			rospy.logerr("checker fail")
 			return pt.common.Status.FAILURE
 
 
@@ -214,51 +160,34 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 		# chill a bit 
 		b6 = pt.composites.Selector(
 			name="Chill",
-			children=[counter(20, "Enough chilling?"), go("Chill", 0, 0)]
+			children=[counter(50, "Enough chilling?"), go("Chill", 0, 0)]
 		)
 
+		# chill a bit 
+		b10 = pt.composites.Selector(
+			name="Chill2",
+			children=[counter(50, "Enough chilling2?"), go("Chill2", 0, 0)]
+		)
+
+		#Full sequence to go back
 		b7 = pt.composites.Sequence(
 			name="Go back",
-			children=[b3, b4])
+			children=[b3, b4, b6])
 		
-		
-
-		#tryz to place
+		#try to place -> if failed should fallback to going back to table
 		b5 = pt.composites.Selector(
 			name="Try to place cube",
-			children=[placecube(), b7])
-
+			children=[placecube(), b7]
+		)
+		
+		#Check if placed -> if failed should fallback to going back to table
 		b8 = pt.composites.Selector(
 			name="Try to place cube",
 			children=[checker(), b7])
 
-		
-		
-		"""
-		# go lower 
-		b0 = pt.composites.Selector(
-			name="Go to door fallback", 
-			children=[counter(30, "At door?"), go("Go to door!", 1, 0)]
-		)
 
-		# tuck the arm
-		b1 = tuckarm()
-
-		# go to table
-		b2 = pt.composites.Selector(
-			name="Go to table fallback",
-			children=[counter(5, "At table?"), go("Go to table!", 0, -1)]
-		)
-
-		# move to chair
-		b3 = pt.composites.Selector(
-			name="Go to chair fallback",
-			children=[counter(13, "At chair?"), go("Go to chair!", 1, 0)]
-		)
-
-		"""
 		# become the tree
-		tree = RSequence(name="Main sequence", children=[b1, b0, b2, b3, b4, b6, b5, b6, b8])
+		tree = RSequence(name="Main sequence", children=[b1, b0, b2, b7, b5, b10, b8])
 		super(BehaviourTree, self).__init__(tree)
 
 		# execute the behaviour tree
