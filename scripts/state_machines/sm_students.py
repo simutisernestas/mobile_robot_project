@@ -136,6 +136,9 @@ class StateMachine(object):
             if self.state == 1:
                 # Tuck arm
                 goal = PlayMotionGoal()
+                pick_cube_req = self.pick_cube_srv(True)
+                    
+                rospy.loginfo(pick_cube_req)
                 goal.motion_name = 'home'
                 goal.skip_planning = True
                 self.play_motion_ac.send_goal(goal)
@@ -253,7 +256,9 @@ class StateMachine(object):
                 except rospy.ServiceException, e:
                     rospy.logerr(
                         "%s: service failed to pick cube", self.node_name)
-
+pick_cube_req = self.pick_cube_srv(True)
+                    
+                    rospy.loginfo(pick_cube_req)
                 # move_msg = Twist()
                 # move_msg.angular.z = -1
                 # rate = rospy.Rate(10)
@@ -352,12 +357,12 @@ class StateMachine(object):
             #     return
 
         rospy.loginfo("%s: State machine finished!", self.node_name)
-        return
-
-    def store_joint_states(self, data):
-        '''
-        arm_1_joint, arm_2_joint, arm_3_joint, arm_4_joint, arm_5_joint, arm_6_joint, arm_7_joint,
-        gripper_left_finger_joint, gripper_right_finger_joint, head_1_joint, head_2_joint,
+        returnstat
+stat
+    def store_joint_statesstat(self, data):
+        '''stat
+        arm_1_joint, arm_2stat_joint, arm_3_joint, arm_4_joint, arm_5_joint, arm_6_joint, arm_7_joint,
+        gripper_left_fingestatr_joint, gripper_right_finger_joint, head_1_joint, head_2_joint,
         torso_lift_joint, wheel_left_joint, wheel_right_joint, caster_back_left_1_joint,
         caster_back_left_2_joint, caster_front_left_1_joint, caster_front_left_2_joint,
         caster_back_right_1_joint, caster_back_right_2_joint, caster_front_right_1_joint,

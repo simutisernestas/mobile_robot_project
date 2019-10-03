@@ -3,7 +3,7 @@
 
   <!-- ROS PARAMETERS -->
   <!-- Initial robot pose in Gazebo: change for levels A, C or E (F for demo)-->
-  <arg name="student_level"         default="A"/>
+  <arg name="student_level"         default="C"/>
 
   <!-- System level -->
   <arg name="namespace_tiago"     default="/"/>
@@ -49,33 +49,34 @@
     </node> -->
 
     <!-- Project RGBD point cloud to laser-scan -->
-    <include file="$(find tiago_laser_sensors)/launch/rgbd_depth_laser.launch">
+    <!-- <include file="$(find tiago_laser_sensors)/launch/rgbd_depth_laser.launch">
       <arg name="image"     value="xtion/depth_registered/image_raw"/>
       <arg name="scan"      value="rgbd_scan"/>
       <arg name="multiple"  value="$(arg multiple)"/>
       <arg name="tf_prefix" value="$(arg tf_prefix)"/>
-    </include>
+    </include> -->
 
-    <!-- AMCL Localization -->
+    <!-- AMCL Localization
+
     <include file="$(find tiago_2dnav)/launch/localization_$(arg localization).launch">
       <arg name="multiple"  value="$(arg multiple)"/>
       <arg name="tf_prefix" value="$(arg tf_prefix)"/>
       <arg name="amcl_with_mapping" value="true"/>
-    </include>
-
-    <!-- Planning: move_base stack -->
+    </include> -->
+    
+    <!-- Planning: move_base stack
     <include file="$(find tiago_2dnav)/launch/move_$(arg planner).launch">
       <arg name="global_planner" value="$(arg global_planner)"/>
       <arg name="local_planner"  value="$(arg local_planner)"/>
       <arg name="public_sim"     value="$(arg public_sim)"/>
       <arg name="tf_prefix"      value="$(arg tf_prefix)"/>
       <arg name="multiple"       value="$(arg multiple)"/>
-    </include>
+    </include> -->
   </group>
 
   <group ns="$(arg namespace_project)">
     <!-- Upper-level state machine -->
-    <node pkg="robotics_project" type="sm_students.py" name="logic_state_machine" output="screen">
+    <node pkg="robotics_project" type="bt_students.py" name="logic_state_machine" output="screen">
       <param name="global_loc_srv"      value=""/>
       <param name="clear_costmaps_srv"  value=""/>
       <param name="pick_srv"            value="/$(arg namespace_project)/pick_srv"/>
@@ -122,7 +123,7 @@
     <!-- Aruco marker detector -->
     <node pkg="aruco_ros" type="single"  name="aruco_single" output="screen">
         <param name="camera_frame"       value="xtion_rgb_optical_frame"/>
-        <param name="aruco_frame"        value="map" /> 
+        <param name="aruco_frame"        value="odom" /> 
         <remap from="/camera_info"       to="/xtion/rgb/camera_info" />
         <remap from="/image"             to="/xtion/rgb/image_rect_color" />
         <param name="marker_pose_topic"  value="/$(arg namespace_project)/marker_pose_topic"/>
@@ -131,9 +132,9 @@
   </group>
 
   <!-- Map providers -->
-  <group if="$(arg provide_map)">
+  <!-- <group if="$(arg provide_map)">
     <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_path)/map.yaml"/>
     <node name="relay_map" pkg="topic_tools" type="relay" args="/map /vo_map"/>
-  </group>
+  </group> -->
 
 </launch>
