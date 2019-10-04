@@ -226,6 +226,8 @@ class StateMachine(object):
                     msg.angular.z = kp * (pick_yaw - robot_yaw)
                     err = abs(pick_yaw - robot_yaw)
 
+
+
                     rospy.loginfo('\n')
                     rospy.loginfo(err)
                     rospy.loginfo(pick_yaw)
