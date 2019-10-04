@@ -123,7 +123,7 @@
     <!-- Aruco marker detector -->
     <node pkg="aruco_ros" type="single"  name="aruco_single" output="screen">
         <param name="camera_frame"       value="xtion_rgb_optical_frame"/>
-        <param name="aruco_frame"        value="odom" /> 
+        <param name="aruco_frame"        value="map" /> 
         <remap from="/camera_info"       to="/xtion/rgb/camera_info" />
         <remap from="/image"             to="/xtion/rgb/image_rect_color" />
         <param name="marker_pose_topic"  value="/$(arg namespace_project)/marker_pose_topic"/>
