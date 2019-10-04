@@ -8,7 +8,9 @@ from reactive_sequence import RSequence
 from std_srvs.srv import Empty, SetBool, SetBoolRequest
 from actionlib import SimpleActionClient
 from play_motion_msgs.msg import PlayMotionAction, PlayMotionGoal
-from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Point, Quaternion, Twist
+from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
+from gazebo_msgs.srv import SetModelState
 
 
 class pickcube(pt.behaviour.Behaviour):
@@ -91,6 +93,31 @@ class placecube(pt.behaviour.Behaviour):
 		# if still trying
         else:
             return pt.common.Status.RUNNING
+#Todo: respawn cube
+class respawn_cube(pt.behaviour.Behaviour):
+
+    def __init__(self):
+        rospy.logerr("Initialising respawn_cube behaviour.")
+        respawn_cube_srv_name = '/gazebo/set_model_state'
+        self.respawn_cube_srv = rospy.ServiceProxy(respawn_cube_srv_name, SetModelState)
+        rospy.wait_for_service(respawn_cube_srv_name, timeout=30)
+        # call /gazebo/set_model_state '{model_state: { model_name: aruco_cube, pose: { position: { x: -1.130530, y: -6.653650, z: 0.86250 }, orientation: {x: 0, y: 0, z: 0, w: 1 } }, twist: { linear: {x: 0 , y: 0, z: 0 } , angular: { x: 0, y: 0, z: 0 } } , reference_frame: map } }'
+        point = Point()
+        point.x = -1.13
+        point.x
+        self.respawn_cube_srv('aruco_cube', 
+            -1.130530, -6.653650, 0.86250, 
+            0, 0, 0, 1, 
+            0 ,  0,  0,  0,  0, 0, 
+            map )
+        # become a behaviour
+        super(respawn_cube, self).__init__("respawn_cube")
+        
+
+    def update(self):
+        # success if done
+        rospy.logerr("success")
+        return pt.common.Status.SUCCESS
 
 
 class is_cube_placed(pt.behaviour.Behaviour):
@@ -120,15 +147,19 @@ class is_cube_placed(pt.behaviour.Behaviour):
             rospy.logerr("Cube missing return fail")
             return pt.common.Status.FAILURE
 
+class localize(pt.behaviour.Behaviour):
+
+    def __init__(self):
+        self.localize_srv = rospy.ServiceProxy('/global_localization', Empty)
+        rospy.wait_for_service('/global_localization', timeout=30)
+        self.localize_srv()
+        super(localize, self).__init__("localize")
+   
+    def update(self):
+        return pt.common.Status.SUCCESS
 
 def build_change_table(name):
-    
-    # timeout = pt.decorators.Timeout(
-	# 		name="Timeout",
-	# 		child=pt.behaviours.Success(name="Have a Beer!"),
-	# 		duration=200.0
-	# )
-    
+
     timeout1 = pt.composites.Selector(
 		name="Chill",
 		children=[counter(30, "Enough chill"), go("Turn", 0, 0)])
@@ -150,31 +181,109 @@ def build_change_table(name):
     return RSequence(name=name, children=[turn_around, timeout1, go_straight, timeout2])
 
 
+class move_to_goal(pt.behaviour.Behaviour):
+   
+    def __init__(self, goal):
+        self.move_to_goal_ac = SimpleActionClient("/move_base", MoveBaseAction)
+        self.move_to_goal_ac.wait_for_server(rospy.Duration(1000))
+        self.move_goal = MoveBaseGoal()
+        self.move_goal.target_pose.pose = goal.pose
+        self.move_goal.target_pose.header.frame_id = 'map'
+        super(move_to_goal, self).__init__("move_to_goal")
+
+    def update(self):
+        self.move_to_goal_ac.send_goal(self.move_goal)
+        success = self.move_to_goal_ac.wait_for_result(rospy.Duration(1000))
+        if success:
+            return pt.common.Status.SUCCESS
+        else:
+            self.move_to_goal_ac.cancel_goal()
+            return pt.common.Status.FAILURE
+
+
 class BehaviourTree(ptr.trees.BehaviourTree):
 
     def __init__(self):
 
-        rospy.loginfo("Initialising behaviour tree")
+        self.pick_cube_srv_name = rospy.get_param(
+            rospy.get_name() + '/pick_srv')
+        self.place_cube_srv_name = rospy.get_param(
+            rospy.get_name() + '/place_srv')
+
+        self.place_pose_top_name = rospy.get_param(
+            rospy.get_name() + '/place_pose_topic')
+        self.pick_pose_top_name = rospy.get_param(
+            rospy.get_name() + '/pick_pose_topic')
+
+        rospy.Subscriber(self.place_pose_top_name,
+                    PoseStamped, self.store_place_pose)
+        rospy.Subscriber(self.pick_pose_top_name,
+                    PoseStamped, self.store_pick_pose)
+
+        rospy.wait_for_service(self.pick_cube_srv_name, timeout=300)
+        rospy.wait_for_service(self.place_cube_srv_name, timeout=300)
+
+        timeout3 = pt.composites.Selector(
+		name="Chill",
+		children=[counter(30, "Enough chill"), go("Turn", 0, 0)])
         
-        timeout = pt.decorators.Timeout(
-			name="Timeout",
-			child=pt.behaviours.Success(name="Have a Beer!"),
-			duration=5.0
-		)
-        
-        confirm_placed_cube = pt.composites.Chooser(
-            name="Confirm cube is on table",
-            children=[is_cube_placed(), build_change_table('Go back')])
-        
+        # confirm_placed_cube = pt.composites.Chooser(
+        #     name="Confirm cube is on table",
+        #     children=[is_cube_placed(), move_to_goal]
+        # )
+
+        twist1 = pt.composites.Selector(
+		    name="twist",
+		    children=[counter(60, "Enough twist"), go("twist", 0, 1)]
+	    )
+
+        twist2 = pt.composites.Selector(
+		    name="twist",
+		    children=[counter(60, "Enough twist"), go("twist", 0, 1)]
+	    )
+
+        prim_sequence = pt.composites.Sequence(
+            name="first_sequence",
+		    children=[
+                movehead("up"),
+                localize(),
+                tuckarm(),
+                twist1,
+                move_to_goal(self.pick_pose_msg),
+                movehead("down"),
+                pickcube(), 
+                movehead("up"),
+                move_to_goal(self.place_pose_msg),
+                placecube(),
+                movehead("down"),
+                timeout3,]
+            )
+
+        second_sequence = pt.composites.Sequence(
+            name="first_sequence",
+		    children=[
+                movehead("up"),
+                tuckarm(),
+                move_to_goal(self.pick_pose_msg),
+                movehead("down"),
+                pickcube(), 
+                movehead("up"),
+                move_to_goal(self.place_pose_msg),
+                placecube(),
+                movehead("down"),
+                timeout3
+                ]
+            )
+        # fallback_move_to_goal
+        fallback = pt.composites.Chooser(
+            name="fallback",
+		    children=[is_cube_placed(), second_sequence]
+        )
         tree = RSequence(name="Main sequence", children=[
-            tuckarm(),
-            movehead("down"),
-            pickcube(), 
-            build_change_table('Go to other table'),
-            placecube(),
-            timeout,
-            confirm_placed_cube
-		])
+            respawn_cube,
+            prim_sequence,
+            fallback
+            ])
 
         super(BehaviourTree, self).__init__(tree)
 
@@ -182,8 +291,14 @@ class BehaviourTree(ptr.trees.BehaviourTree):
         rospy.sleep(1)
         self.setup(timeout=10000)
         while not rospy.is_shutdown():
+            rospy.logerr('tick')
             self.tick_tock(1)
 
+    def store_place_pose(self, data):
+        self.place_pose_msg = data
+
+    def store_pick_pose(self, data):
+        self.pick_pose_msg = data
 
 if __name__ == "__main__":
 
