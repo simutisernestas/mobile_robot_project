@@ -122,23 +122,32 @@ class is_cube_placed(pt.behaviour.Behaviour):
 
 
 def build_change_table(name):
-    timeout = pt.decorators.Timeout(
-			name="Timeout",
-			child=pt.behaviours.Success(name="Have a Beer!"),
-			duration=2.0
-	)
     
+    # timeout = pt.decorators.Timeout(
+	# 		name="Timeout",
+	# 		child=pt.behaviours.Success(name="Have a Beer!"),
+	# 		duration=200.0
+	# )
+    
+    timeout1 = pt.composites.Selector(
+		name="Chill",
+		children=[counter(30, "Enough chill"), go("Turn", 0, 0)])
+
+    timeout2 = pt.composites.Selector(
+		name="Chill",
+		children=[counter(30, "Enough chill"), go("Turn", 0, 0)])
+
     turn_around = pt.composites.Selector(
 		name="Turn around",
-		children=[counter(30, "Turned around?"), go("Turn", 0, -1)]
+		children=[counter(58, "Turned around?"), go("Turn", 0, -0.5)]
 	)
 
     go_straight = pt.composites.Selector(
 		name="Walk",
-		children=[counter(10, "At table?"), go("Walk", 0.8, 0)]
+		children=[counter(20, "At table?"), go("Walk", 0.4, 0)]
 	)
 
-    return RSequence(name=name, children=[turn_around, timeout, go_straight, timeout])
+    return RSequence(name=name, children=[turn_around, timeout1, go_straight, timeout2])
 
 
 class BehaviourTree(ptr.trees.BehaviourTree):
