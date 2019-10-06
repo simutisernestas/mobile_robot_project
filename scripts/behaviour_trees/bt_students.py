@@ -100,6 +100,10 @@ class placecube(pt.behaviour.Behaviour):
 class respawn_cube(pt.behaviour.Behaviour):
 
     def __init__(self):
+        
+        super(respawn_cube, self).__init__("respawn_cube")
+
+    def update(self):
         rospy.logerr("Initialising respawn_cube behaviour.")
         respawn_cube_srv_name = '/gazebo/set_model_state'
         self.respawn_cube_srv = rospy.ServiceProxy(
@@ -114,9 +118,6 @@ class respawn_cube(pt.behaviour.Behaviour):
         pose.position.z = data['pose']['position']['z']
         msg.pose = pose
         self.respawn_cube_srv(msg)
-        super(respawn_cube, self).__init__("respawn_cube")
-
-    def update(self):
         return pt.common.Status.SUCCESS
 
 
@@ -178,6 +179,86 @@ class move_to_goal(pt.behaviour.Behaviour):
         else:
             self.move_to_goal_ac.cancel_goal()
             return pt.common.Status.FAILURE
+
+class fail(pt.behaviour.Behaviour):
+
+    def __init__(self):
+        super(fail, self).__init__("fail")
+
+    def update(self):
+        return pt.common.Status.FAILURE
+
+class prints(pt.behaviour.Behaviour):
+
+    def __init__(self):
+        super(prints, self).__init__("prints")
+
+    def update(self):
+        rospy.logerr("printsomething")
+        return pt.common.Status.SUCCESS
+
+class tuckarm2(pt.behaviour.Behaviour):
+
+    """
+    Sends a goal to the tuck arm action server.
+    Returns running whilst awaiting the result,
+    success if the action was succesful, and v.v..
+    """
+
+    def __init__(self):
+
+        rospy.loginfo("Initialising tuck arm behaviour.")
+
+        # Set up action client
+        self.play_motion_ac = SimpleActionClient("/play_motion", PlayMotionAction)
+
+        # personal goal setting
+        self.goal = PlayMotionGoal()
+        self.goal.motion_name = 'home'
+        self.goal.skip_planning = True
+
+        # execution checker
+        self.sent_goal = False
+        self.finished = False
+
+        # become a behaviour
+        super(tuckarm2, self).__init__("Tuck arm!")
+
+    def update(self):
+        # already tucked the arm
+        if self.finished: 
+            return pt.common.Status.SUCCESS
+        
+        # command to tuck arm if haven't already
+        elif not self.sent_goal:
+
+            # send the goal
+            self.play_motion_ac.send_goal(self.goal)
+            self.sent_goal = True
+
+            # tell the tree you're running
+            return pt.common.Status.RUNNING
+
+        # if I was succesful! :)))))))))
+        elif self.play_motion_ac.get_result():
+
+            # than I'm finished!
+            self.finished = True
+            rospy.logerr("Arm tucked")
+            rospy.logerr("Success tucking")
+            return pt.common.Status.SUCCESS
+
+        # if failed
+        elif not self.play_motion_ac.get_result():
+            rospy.logerr("fail tucking")
+            return pt.common.Status.FAILURE
+        
+        # try if not triedmon.Status.FAILURE
+
+        # if I'm still trying :|
+        else:
+            return pt.common.Status.RUNNING
+
 
 
 class relocalize(pt.behaviour.Behaviour):
@@ -273,10 +354,11 @@ class BehaviourTree(ptr.trees.BehaviourTree):
             children=[counter(60, "Corrected?"), relocalize(), go("spin", 0, 1)]
         )
         
-        cube_spawn = pt.composites.Selector(
-            name="twist",
-            children=[counter(60, "Cube spawned?"), respawn_cube()]
-        ) 
+    
+        # cube_spawn = pt.composites.Selector(
+        #     name="respawn_cube",
+        #     children=[counter(60, "Cube spawned?"), respawn_cube()]
+        # ) 
         
         home_position = tuckarm()
 
@@ -284,8 +366,8 @@ class BehaviourTree(ptr.trees.BehaviourTree):
             name="first_sequence",
             children=[
                 movehead("up"),
-                localization,
                 home_position,
+                localization,
                 spin,
                 move_to_goal(self.pick_pose_msg),
                 movehead("down"),
@@ -293,7 +375,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
                 movehead("up"),
                 move_to_goal(self.place_pose_msg),
                 placecube(),
-                movehead("down"),
+                movehead("down")
             ]
         )
 
@@ -302,10 +384,25 @@ class BehaviourTree(ptr.trees.BehaviourTree):
         second_sequence = pt.composites.Sequence(
             name="second_sequence",
             children=[
+                prints(),
+                respawn_cube(),
                 movehead("up"),
-                localization,
+                tuckarm2(),
+                move_to_goal(self.pick_pose_msg),
+                movehead("down"),
+                pickcube(),
+                movehead("up"),
+                move_to_goal(self.place_pose_msg),
+                placecube(),
+                movehead("down")
+            ]
+        )
+
+        third_sequence = pt.composites.Sequence(
+            name="second_sequence",
+            children=[
+                movehead("up"),
                 home_position,
-                spin,
                 move_to_goal(self.pick_pose_msg),
                 movehead("down"),
                 pickcube(),
@@ -313,6 +410,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
                 move_to_goal(self.place_pose_msg),
                 placecube(),
                 movehead("down"),
+                fail()
             ]
         )
 
@@ -320,17 +418,27 @@ class BehaviourTree(ptr.trees.BehaviourTree):
         fallback = pt.composites.Chooser(
             name="fallback",
             children=[
+                primary_sequence,
                 is_cube_placed(),
-                cube_spawn,
                 second_sequence
+            ]
+        )
+        fallback2 = pt.composites.Chooser(
+            name="fallback2",
+            children=[
+                is_cube_placed(),
+                third_sequence
             ]
         )
 
         tree = RSequence(
             name="Main sequence",
             children=[
-                primary_sequence,
-                fallback
+                fallback,
+                fallback2,
+                movehead('up'),
+                movehead('down'),
+                movehead('up')
             ]
         )
 

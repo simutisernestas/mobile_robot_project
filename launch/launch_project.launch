@@ -82,7 +82,7 @@
       <param name="place_srv"           value="/$(arg namespace_project)/place_srv"/>
       <param name="nav_goal_topic"      value=""/>
       <param name="cmd_vel_topic"       value="/key_vel"/>
-      <param name="move_base_frame"     value="odom"/>
+      <param name="move_base_frame"     value="map"/>
       <param name="pick_pose_topic"     value="/$(arg namespace_project)/pick_pose_topic"/>
       <param name="place_pose_topic"    value="/$(arg namespace_project)/place_pose_topic"/>
       <param name="aruco_pose_topic"    value="/$(arg namespace_project)/marker_pose_topic"/> 
@@ -122,11 +122,11 @@
     <!-- Aruco marker detector -->
     <node pkg="aruco_ros" type="single"  name="aruco_single" output="screen">
         <param name="camera_frame"       value="xtion_rgb_optical_frame"/>
-        <param name="aruco_frame"        value="" /> 
+        <param name="aruco_frame"        value="map" /> 
         <remap from="/camera_info"       to="/xtion/rgb/camera_info" />
         <remap from="/image"             to="/xtion/rgb/image_rect_color" />
         <param name="marker_pose_topic"  value="/$(arg namespace_project)/marker_pose_topic"/>
-        <param name="robot_base_frame"   value=""/>
+        <param name="robot_base_frame"   value="base_footprint"/>
     </node>
   </group>
 
