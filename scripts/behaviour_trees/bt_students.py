@@ -8,9 +8,11 @@ from reactive_sequence import RSequence
 from std_srvs.srv import Empty, SetBool, SetBoolRequest
 from actionlib import SimpleActionClient
 from play_motion_msgs.msg import PlayMotionAction, PlayMotionGoal
-from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Point, Quaternion, Twist
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Pose
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
-from gazebo_msgs.srv import SetModelState
+from gazebo_msgs.srv import SetModelState, SpawnModel
+from gazebo_msgs.msg import ModelState
+from nav_msgs.msg import Odometry
 
 
 class pickcube(pt.behaviour.Behaviour):
@@ -20,7 +22,7 @@ class pickcube(pt.behaviour.Behaviour):
         pick_cube_srv_name = rospy.get_param(rospy.get_name() + '/pick_srv')
         self.pick_cube_srv = rospy.ServiceProxy(pick_cube_srv_name, SetBool)
         rospy.wait_for_service(pick_cube_srv_name, timeout=30)
-		# execution checker
+        # execution checker
         self.tried = False
         self.done = False
         # become a behaviour
@@ -31,7 +33,7 @@ class pickcube(pt.behaviour.Behaviour):
         if self.done:
             return pt.common.Status.SUCCESS
 
-		# try if not tried
+            # try if not tried
         elif not self.tried:
             # command
             self.pick_cube_req = self.pick_cube_srv(True)
@@ -41,16 +43,16 @@ class pickcube(pt.behaviour.Behaviour):
             # tell the tree you're running
             return pt.common.Status.RUNNING
 
-		# if succesful
+            # if succesful
         elif self.pick_cube_req.success:
             self.done = True
             return pt.common.Status.SUCCESS
 
-		# if failed
+            # if failed
         elif not self.pick_cube_req.success:
             return pt.common.Status.FAILURE
 
-		# if still trying
+            # if still trying
         else:
             return pt.common.Status.RUNNING
 
@@ -73,7 +75,7 @@ class placecube(pt.behaviour.Behaviour):
         if self.done:
             return pt.common.Status.SUCCESS
 
-		# try if not tried
+            # try if not tried
         elif not self.tried:
             # command
             self.place_cube_req = self.place_cube_srv(True)
@@ -81,42 +83,40 @@ class placecube(pt.behaviour.Behaviour):
             self.tried = True
             return pt.common.Status.RUNNING
 
-		# if succesful
+            # if succesful
         elif self.place_cube_req.success:
             self.done = True
             return pt.common.Status.SUCCESS
 
-		# if failed
+            # if failed
         elif not self.place_cube_req.success:
             return pt.common.Status.FAILURE
 
-		# if still trying
+            # if still trying
         else:
             return pt.common.Status.RUNNING
-#Todo: respawn cube
+
+
 class respawn_cube(pt.behaviour.Behaviour):
 
     def __init__(self):
         rospy.logerr("Initialising respawn_cube behaviour.")
         respawn_cube_srv_name = '/gazebo/set_model_state'
-        self.respawn_cube_srv = rospy.ServiceProxy(respawn_cube_srv_name, SetModelState)
+        self.respawn_cube_srv = rospy.ServiceProxy(
+            '/gazebo/set_model_state', SetModelState)
         rospy.wait_for_service(respawn_cube_srv_name, timeout=30)
-        # call /gazebo/set_model_state '{model_state: { model_name: aruco_cube, pose: { position: { x: -1.130530, y: -6.653650, z: 0.86250 }, orientation: {x: 0, y: 0, z: 0, w: 1 } }, twist: { linear: {x: 0 , y: 0, z: 0 } , angular: { x: 0, y: 0, z: 0 } } , reference_frame: map } }'
-        point = Point()
-        point.x = -1.13
-        point.x
-        self.respawn_cube_srv('aruco_cube', 
-            -1.130530, -6.653650, 0.86250, 
-            0, 0, 0, 1, 
-            0 ,  0,  0,  0,  0, 0, 
-            map )
-        # become a behaviour
+        data = {'model_name': 'aruco_cube', 'pose': {'position': {'x': -1.130530, 'y': -6.653650, 'z': 1.86250}, 'orientation': {'x': 0, 'y': 0, 'z': 0, 'w': 1}}, 'twist': {'linear': {'x': 0, 'y': 0, 'z': 0}, 'angular': {'x': 0, 'y': 0, 'z': 0}}, 'reference_frame': 'map'}
+        msg = ModelState()
+        msg.model_name = data['model_name']
+        pose = Pose()
+        pose.position.x = data['pose']['position']['x']
+        pose.position.y = data['pose']['position']['y']
+        pose.position.z = data['pose']['position']['z']
+        msg.pose = pose
+        self.respawn_cube_srv(msg)
         super(respawn_cube, self).__init__("respawn_cube")
-        
 
     def update(self):
-        # success if done
-        rospy.logerr("success")
         return pt.common.Status.SUCCESS
 
 
@@ -125,20 +125,20 @@ class is_cube_placed(pt.behaviour.Behaviour):
     def __init__(self):
         self.aruco_pose_top = rospy.get_param(
             rospy.get_name() + '/aruco_pose_topic')
-        
+
         def aruco_callback(_):
             self.aruco_pose_rcv = True
-                    
+
         self.aruco_pose_subs = rospy.Subscriber(
             self.aruco_pose_top, PoseStamped, aruco_callback)
-        
+
         super(is_cube_placed, self).__init__("is_cube_placed")
-   
+
     def update(self):
         self.aruco_pose_rcv = False
-        
+
         rospy.sleep(5)
-        
+
         if self.aruco_pose_rcv == True:
             rospy.loginfo("Cube placed return success")
             exit()
@@ -147,42 +147,21 @@ class is_cube_placed(pt.behaviour.Behaviour):
             rospy.logerr("Cube missing return fail")
             return pt.common.Status.FAILURE
 
+
 class localize(pt.behaviour.Behaviour):
 
     def __init__(self):
         self.localize_srv = rospy.ServiceProxy('/global_localization', Empty)
         rospy.wait_for_service('/global_localization', timeout=30)
-        self.localize_srv()
         super(localize, self).__init__("localize")
-   
+
     def update(self):
+        self.localize_srv()
         return pt.common.Status.SUCCESS
-
-def build_change_table(name):
-
-    timeout1 = pt.composites.Selector(
-		name="Chill",
-		children=[counter(30, "Enough chill"), go("Turn", 0, 0)])
-
-    timeout2 = pt.composites.Selector(
-		name="Chill",
-		children=[counter(30, "Enough chill"), go("Turn", 0, 0)])
-
-    turn_around = pt.composites.Selector(
-		name="Turn around",
-		children=[counter(58, "Turned around?"), go("Turn", 0, -0.5)]
-	)
-
-    go_straight = pt.composites.Selector(
-		name="Walk",
-		children=[counter(20, "At table?"), go("Walk", 0.4, 0)]
-	)
-
-    return RSequence(name=name, children=[turn_around, timeout1, go_straight, timeout2])
 
 
 class move_to_goal(pt.behaviour.Behaviour):
-   
+
     def __init__(self, goal):
         self.move_to_goal_ac = SimpleActionClient("/move_base", MoveBaseAction)
         self.move_to_goal_ac.wait_for_server(rospy.Duration(1000))
@@ -201,10 +180,57 @@ class move_to_goal(pt.behaviour.Behaviour):
             return pt.common.Status.FAILURE
 
 
+class relocalize(pt.behaviour.Behaviour):
+
+    def __init__(self):
+        # TODO consider THIS
+        # seems like ground_truth_odom works better for odometry, but it could be that
+        # we still need to transform frames , because it is different fomr acml pose
+         
+        # rospy.Subscriber('/mobile_base_controller/odom', Odometry, self.store_robot_position)
+        rospy.Subscriber('/ground_truth_odom', Odometry, self.store_robot_position) 
+        rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.store_amcl_pose)
+        
+        self.localize_srv = rospy.ServiceProxy('/global_localization', Empty)
+        rospy.wait_for_service('/global_localization', timeout=30)
+        self.localize_called = False
+        
+        super(relocalize, self).__init__("relocalize")
+
+    def update(self):
+        e_x = abs(self.robot_position.position.x - self.acml_pose.position.x)
+        e_y = abs(self.robot_position.position.y - self.acml_pose.position.y)
+        e_z = abs(self.robot_position.position.z - self.acml_pose.position.z)
+        e_o_x = abs(self.robot_position.orientation.x - self.acml_pose.orientation.x)
+        e_o_y = abs(self.robot_position.orientation.y - self.acml_pose.orientation.y)
+        e_o_z = abs(self.robot_position.orientation.z - self.acml_pose.orientation.z)
+        e_o_w = abs(self.robot_position.orientation.w - self.acml_pose.orientation.w)
+        
+        total_error = e_x + e_y + e_z + e_o_x + e_o_y + e_o_z + e_o_w
+        # rospy.loginfo(total_error)
+        
+        # For now this is quite big, maybe because of reason mentioned above 
+        treshold = 3.0
+
+        if total_error > treshold:
+            if not self.localize_called:
+                self.localize_srv()
+            self.localize_called = True
+            return pt.common.Status.RUNNING
+        
+        if total_error < treshold:
+            return pt.common.Status.SUCCESS
+
+    def store_robot_position(self, msg):
+        self.robot_position = msg.pose.pose
+
+    def store_amcl_pose(self, msg):
+        self.acml_pose = msg.pose.pose
+
+
 class BehaviourTree(ptr.trees.BehaviourTree):
 
     def __init__(self):
-
         self.pick_cube_srv_name = rospy.get_param(
             rospy.get_name() + '/pick_srv')
         self.place_cube_srv_name = rospy.get_param(
@@ -216,82 +242,104 @@ class BehaviourTree(ptr.trees.BehaviourTree):
             rospy.get_name() + '/pick_pose_topic')
 
         rospy.Subscriber(self.place_pose_top_name,
-                    PoseStamped, self.store_place_pose)
+                         PoseStamped, self.store_place_pose)
         rospy.Subscriber(self.pick_pose_top_name,
-                    PoseStamped, self.store_pick_pose)
+                         PoseStamped, self.store_pick_pose)
 
         rospy.wait_for_service(self.pick_cube_srv_name, timeout=300)
         rospy.wait_for_service(self.place_cube_srv_name, timeout=300)
 
-        timeout3 = pt.composites.Selector(
-		name="Chill",
-		children=[counter(30, "Enough chill"), go("Turn", 0, 0)])
-        
-        # confirm_placed_cube = pt.composites.Chooser(
-        #     name="Confirm cube is on table",
-        #     children=[is_cube_placed(), move_to_goal]
+        # TODO (Selector + counter) with each behaviuor
+        # because counter terminates the action I guess
+        # ---------------------------------------------
+        # b0 = pt.composites.Selector(
+        #     name="Go to door fallback",
+        #     children=[counter(30, "At door?"), go("Go to door!", 1, 0)]
         # )
 
-        twist1 = pt.composites.Selector(
-		    name="twist",
-		    children=[counter(60, "Enough twist"), go("twist", 0, 1)]
-	    )
+        spin = pt.composites.Selector(
+            name="twist",
+            children=[counter(60, "Enough spin"), go("spin", 0, 1)]
+        )
+        
+        localization = pt.composites.Selector(
+            name="twist",
+            children=[counter(60, "Localized?"), localize()]
+        )
+        
+        # TODO Where should correction go ???
+        pose_correction = pt.composites.Selector(
+            name="twist",
+            children=[counter(60, "Corrected?"), relocalize(), go("spin", 0, 1)]
+        )
+        
+        cube_spawn = pt.composites.Selector(
+            name="twist",
+            children=[counter(60, "Cube spawned?"), respawn_cube()]
+        ) 
+        
+        home_position = tuckarm()
 
-        twist2 = pt.composites.Selector(
-		    name="twist",
-		    children=[counter(60, "Enough twist"), go("twist", 0, 1)]
-	    )
-
-        prim_sequence = pt.composites.Sequence(
+        primary_sequence = pt.composites.Sequence(
             name="first_sequence",
-		    children=[
+            children=[
                 movehead("up"),
-                localize(),
-                tuckarm(),
-                twist1,
+                localization,
+                home_position,
+                spin,
                 move_to_goal(self.pick_pose_msg),
                 movehead("down"),
-                pickcube(), 
+                pickcube(),
                 movehead("up"),
                 move_to_goal(self.place_pose_msg),
                 placecube(),
                 movehead("down"),
-                timeout3,]
-            )
+            ]
+        )
 
+        # TODO Think aobut second sequence, 
+        #      maybe some actions redundant  
         second_sequence = pt.composites.Sequence(
-            name="first_sequence",
-		    children=[
+            name="second_sequence",
+            children=[
                 movehead("up"),
-                tuckarm(),
+                localization,
+                home_position,
+                spin,
                 move_to_goal(self.pick_pose_msg),
                 movehead("down"),
-                pickcube(), 
+                pickcube(),
                 movehead("up"),
                 move_to_goal(self.place_pose_msg),
                 placecube(),
                 movehead("down"),
-                timeout3
-                ]
-            )
+            ]
+        )
+
         # fallback_move_to_goal
         fallback = pt.composites.Chooser(
             name="fallback",
-		    children=[is_cube_placed(), second_sequence]
+            children=[
+                is_cube_placed(),
+                cube_spawn,
+                second_sequence
+            ]
         )
-        tree = RSequence(name="Main sequence", children=[
-            respawn_cube,
-            prim_sequence,
-            fallback
-            ])
+
+        tree = RSequence(
+            name="Main sequence",
+            children=[
+                primary_sequence,
+                fallback
+            ]
+        )
 
         super(BehaviourTree, self).__init__(tree)
 
         # execute BT
         rospy.sleep(1)
-        self.setup(timeout=10000)
+        self.setup(timeout=100)
         while not rospy.is_shutdown():
-            rospy.logerr('tick')
             self.tick_tock(1)
 
     def store_place_pose(self, data):
@@ -299,6 +347,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
     def store_pick_pose(self, data):
         self.pick_pose_msg = data
+
 
 if __name__ == "__main__":
 
