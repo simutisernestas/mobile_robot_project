@@ -132,8 +132,14 @@ def build_change_table(name):
 		name="Walk",
 		children=[counter(20, "At table?"), go("Walk", 0.4, 0)]
 	)
+    
+    timeout = pt.decorators.Timeout(
+			name="Timeout",
+			child=pt.behaviours.Success(name="Have a Beer!"),
+			duration=100.0
+	)
 
-    return RSequence(name=name, children=[turn_around, go_straight])
+    return RSequence(name=name, children=[turn_around, go_straight, timeout])
 
 
 class BehaviourTree(ptr.trees.BehaviourTree):
