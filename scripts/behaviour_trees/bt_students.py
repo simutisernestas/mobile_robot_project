@@ -123,20 +123,6 @@ class is_cube_placed(pt.behaviour.Behaviour):
 
 def build_change_table(name):
     
-    # timeout = pt.decorators.Timeout(
-	# 		name="Timeout",
-	# 		child=pt.behaviours.Success(name="Have a Beer!"),
-	# 		duration=200.0
-	# )
-    
-    timeout1 = pt.composites.Selector(
-		name="Chill",
-		children=[counter(30, "Enough chill"), go("Turn", 0, 0)])
-
-    timeout2 = pt.composites.Selector(
-		name="Chill",
-		children=[counter(30, "Enough chill"), go("Turn", 0, 0)])
-
     turn_around = pt.composites.Selector(
 		name="Turn around",
 		children=[counter(58, "Turned around?"), go("Turn", 0, -0.5)]
@@ -147,7 +133,7 @@ def build_change_table(name):
 		children=[counter(20, "At table?"), go("Walk", 0.4, 0)]
 	)
 
-    return RSequence(name=name, children=[turn_around, timeout1, go_straight, timeout2])
+    return RSequence(name=name, children=[turn_around, go_straight])
 
 
 class BehaviourTree(ptr.trees.BehaviourTree):
@@ -156,24 +142,30 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
         rospy.loginfo("Initialising behaviour tree")
         
-        timeout = pt.decorators.Timeout(
-			name="Timeout",
-			child=pt.behaviours.Success(name="Have a Beer!"),
-			duration=5.0
-		)
+        is_placed = pt.composites.Selector(
+            name="twist",
+            children=[counter(2, "Is Placed?"), is_cube_placed()]
+        )
         
         confirm_placed_cube = pt.composites.Chooser(
             name="Confirm cube is on table",
-            children=[is_cube_placed(), build_change_table('Go back')])
+            children=[is_placed, build_change_table('Go back')])
+        
+        place = pt.composites.Selector(
+            name="twist",
+            children=[counter(60, "Placed?"), placecube()])
+        
+        pick = pt.composites.Selector(
+            name="twist",
+            children=[counter(60, "Picked?"), pickcube()])
         
         tree = RSequence(name="Main sequence", children=[
             tuckarm(),
             movehead("down"),
-            pickcube(), 
+            pick, 
             build_change_table('Go to other table'),
-            placecube(),
-            timeout,
-            confirm_placed_cube
+            place,
+            confirm_placed_cube,
 		])
 
         super(BehaviourTree, self).__init__(tree)
